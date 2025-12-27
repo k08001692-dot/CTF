@@ -39,7 +39,6 @@ def checkout():
             "message": "Total missing"
         }), 400
 
-    # 🔥 Flag 4 condition
     if total <= 1:
         return jsonify({
             "status": "success",
@@ -54,4 +53,24 @@ def checkout():
         "paid": total
     })
 
+@api.route("/login", methods=["POST"])
+def login():
+    data = request.json or {}
+    email = data.get("email")
+    password = data.get("password")
+
+    if email and password is None:
+        return jsonify({
+            "status": "success",
+            "message": "Logged in as admin",
+            "flag": FLAGS["login_bypass"]
+        })
+
+    if not email:
+        return jsonify({"error": "Email required"}), 400
+
+    return jsonify({
+        "status": "success",
+        "message": "Login successful"
+    })
 
