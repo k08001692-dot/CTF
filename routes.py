@@ -1,6 +1,8 @@
 from flask import Blueprint, request, jsonify
-from data import users, books
+from data import users, books, orders, wishlists, sessions
 from flags import FLAGS
+import hashlib
+import time
 
 api = Blueprint("api", __name__)
 
@@ -93,4 +95,92 @@ def get_book():
             "error": str(e),
             "debug_trace": FLAGS["admin_access"]
         }), 500
+
+
+@api.route("/order", methods=["GET"])
+def get_order():
+    order_id = request.args.get("id")
+    if not order_id:
+        return jsonify({"error": "Order ID required"}), 400
+    try:
+        order_id = int(order_id)
+    except:
+        return jsonify({"error": "Invalid order ID"}), 400
+    for order in orders:
+        if order["id"] == order_id:
+            return jsonify(order)
+    return jsonify({"error": "Order not found"}), 404
+
+
+@api.route("/wishlist", methods=["GET"])
+def get_wishlist():
+    user_id = request.args.get("user_id", type=int)
+    if not user_id:
+        return jsonify({"error": "User ID required"}), 400
+    if user_id in wishlists:
+        wl = wishlists[user_id]
+        return jsonify({
+            "status": "success",
+            "count": len(wl.get("items", [])),
+            "data": wl
+        })
+    return jsonify({"status": "success", "count": 0, "items": []})
+
+
+@api.route("/user/role", methods=["POST"])
+def update_role():
+    data = request.json or {}
+    user_id = data.get("user_id")
+    new_role = data.get("role")
+    if not user_id or not new_role:
+        return jsonify({"error": "user_id and role required"}), 400
+    for user in users:
+        if user["id"] == user_id:
+            if new_role == "admin":
+                user["role"] = new_role
+                return jsonify({
+                    "status": "success",
+                    "message": "Role updated",
+                    "user": user["email"],
+                    "new_role": new_role,
+                    "grant_token": FLAGS["role_escalation"]
+                })
+            user["role"] = new_role
+            return jsonify({"status": "success", "message": "Role updated"})
+    return jsonify({"error": "User not found"}), 404
+
+
+@api.route("/profile", methods=["GET"])
+def get_profile():
+    auth = request.headers.get("Authorization", "")
+    if not auth:
+        return jsonify({"error": "Authorization required"}), 401
+    if auth.startswith("Bearer "):
+        token = auth[7:]
+        if len(token) > 0:
+            if token == "undefined" or token == "null" or token.startswith("{{"): 
+                return jsonify({
+                    "status": "success",
+                    "user": "guest",
+                    "debug_token": FLAGS["token_bypass"]
+                })
+            return jsonify({"status": "success", "user": "authenticated"})
+    return jsonify({"error": "Invalid token format"}), 401
+
+
+@api.route("/admin/reports", methods=["GET"])
+def admin_reports():
+    auth = request.headers.get("Authorization", "")
+    is_admin = request.headers.get("X-Admin", "false")
+    user_role = request.args.get("role", "user")
+    if is_admin.lower() == "true" or user_role == "admin":
+        return jsonify({
+            "status": "success",
+            "reports": [
+                {"id": 1, "type": "sales", "date": "2025-01-01"},
+                {"id": 2, "type": "inventory", "date": "2025-01-02"}
+            ],
+            "admin_key": FLAGS["admin_panel"]
+        })
+    return jsonify({"error": "Admin access required"}), 403
 
